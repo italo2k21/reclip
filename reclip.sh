@@ -66,7 +66,6 @@ if [ ! -d "venv" ]; then
     python3 -m venv venv
 fi
 
-# Activar el entorno virtual
 source venv/bin/activate
 
 # -----------------------------------------
