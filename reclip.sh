@@ -1,49 +1,105 @@
 #!/bin/bash
-set -e
-cd "$(dirname "$0")"
 
-# Check prerequisites
-missing=""
+# =====================================================
+# ReClip - Script de inicio con auto-instalación y verificación
+# =====================================================
 
-if ! command -v python3 &> /dev/null; then
-    missing="$missing python3"
-fi
+set -e  # Salir si hay error crítico
 
-if ! command -v yt-dlp &> /dev/null; then
-    missing="$missing yt-dlp"
-fi
+# Colores para mensajes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
 
-if ! command -v ffmpeg &> /dev/null; then
-    missing="$missing ffmpeg"
-fi
+echo -e "${GREEN}==> ReClip Starting...${NC}"
 
-if [ -n "$missing" ]; then
-    echo "Missing required tools:$missing"
-    echo ""
-    if command -v brew &> /dev/null; then
-        echo "Install with:  brew install$missing"
-    elif command -v apt &> /dev/null; then
-        echo "Install with:  sudo apt install$missing"
+# -----------------------------------------
+# 1. Verificar dependencias del sistema
+# -----------------------------------------
+MISSING_SYSTEM=0
+
+check_cmd() {
+    if ! command -v $1 &> /dev/null; then
+        echo -e "${RED}Missing: $1${NC}"
+        MISSING_SYSTEM=1
     else
-        echo "Please install:$missing"
+        echo -e "${GREEN}Found: $1${NC}"
     fi
-    exit 1
+}
+
+echo -e "\n${YELLOW}Checking system dependencies...${NC}"
+check_cmd python3
+check_cmd pip3
+check_cmd ffmpeg
+
+if [ $MISSING_SYSTEM -eq 1 ]; then
+    echo -e "\n${YELLOW}Attempting to install missing packages (requires sudo)...${NC}"
+    if command -v apt &> /dev/null; then
+        sudo apt update
+        sudo apt install -y python3 python3-pip python3-venv ffmpeg
+    elif command -v yum &> /dev/null; then
+        sudo yum install -y python3 python3-pip ffmpeg
+    elif command -v brew &> /dev/null; then
+        brew install python3 ffmpeg
+    else
+        echo -e "${RED}Could not auto-install. Please install python3, pip, and ffmpeg manually.${NC}"
+        exit 1
+    fi
 fi
 
-# Set up venv and install Python deps
-if [ ! -d "venv" ]; then
-    echo "Setting up virtual environment..."
-    python3 -m venv venv
-    source venv/bin/activate
-    pip install -q flask yt-dlp
+# -----------------------------------------
+# 2. Verificar cookies.txt (recomendado)
+# -----------------------------------------
+if [ ! -f "cookies.txt" ]; then
+    echo -e "${YELLOW}⚠️  cookies.txt not found. Some YouTube videos may fail.${NC}"
+    echo -e "${YELLOW}   Get it from browser extension 'Get cookies.txt LOCALLY' and place it here.${NC}"
 else
-    source venv/bin/activate
+    echo -e "${GREEN}✅ cookies.txt found.${NC}"
 fi
 
-PORT="${PORT:-8899}"
-export PORT
+# -----------------------------------------
+# 3. Crear y activar entorno virtual
+# -----------------------------------------
+if [ ! -d "venv" ]; then
+    echo -e "\n${YELLOW}Creating virtual environment...${NC}"
+    python3 -m venv venv
+fi
 
-echo ""
-echo "  ReClip is running at http://localhost:$PORT"
-echo ""
+# Activar el entorno virtual
+source venv/bin/activate
+
+# -----------------------------------------
+# 4. Instalar/actualizar dependencias Python
+# -----------------------------------------
+echo -e "\n${YELLOW}Installing/updating Python packages...${NC}"
+pip install --upgrade pip
+pip install flask yt-dlp
+
+# Asegurar última versión de yt-dlp (útil para evitar bloqueos)
+pip install --upgrade yt-dlp
+
+# -----------------------------------------
+# 5. Crear directorio de descargas si no existe
+# -----------------------------------------
+mkdir -p downloads
+
+# -----------------------------------------
+# 6. Lanzar la aplicación Flask
+# -----------------------------------------
+echo -e "\n${GREEN}Starting ReClip server...${NC}"
+export FLASK_APP=app.py
+PORT=${PORT:-8899}
+
+# Mostrar direcciones de acceso
+echo -e "${GREEN}ReClip will be available at:${NC}"
+echo -e "  - http://localhost:$PORT"
+# Obtener IP local (funciona en la mayoría de sistemas)
+IP=$(hostname -I | awk '{print $1}')
+if [ -n "$IP" ]; then
+    echo -e "  - http://$IP:$PORT (from other devices)"
+fi
+echo -e "\n${YELLOW}Press Ctrl+C to stop.${NC}\n"
+
+# Ejecutar Flask (app.py ya tiene host='0.0.0.0' y port)
 python3 app.py
