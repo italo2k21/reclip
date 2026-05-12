@@ -483,9 +483,8 @@
               status: 'ready',
               title: data.title || '',
               thumbnail: data.thumbnail || '',
-              duration: data.duration,
               uploader: data.uploader || '',
-              formats: data.formats || [],
+              formats: data.formats || [],   // new structure: { id, label, height, size_mb }
               selectedFormatId: data.formats?.[0]?.id || null,
             };
           }
@@ -557,11 +556,16 @@
         thumbHtml = `<div class="no-thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><circle cx="8" cy="8" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></div>`;
       }
 
+      // Build quality chips with file size if available
       let qualityChips = '';
-      if (!isAudio && c.formats && c.formats.length > 1) {
-        qualityChips = c.formats.map(f =>
-          `<button class="q-chip${f.id === c.selectedFormatId ? ' active' : ''}" onclick="pickFormat(${idx}, '${f.id}')">${f.label}</button>`
-        ).join('');
+      if (!isAudio && c.formats && c.formats.length > 0) {
+        qualityChips = c.formats.map(f => {
+          const sizeText = f.size_mb ? ` (${f.size_mb} MB)` : '';
+          return `<button class="q-chip${f.id === c.selectedFormatId ? ' active' : ''}" onclick="pickFormat(${idx}, '${f.id}')">${f.label}${sizeText}</button>`;
+        }).join('');
+      } else if (!isAudio && (!c.formats || c.formats.length === 0)) {
+        // fallback: show a message
+        qualityChips = `<span class="card-status" style="font-size:0.65rem;">No quality info</span>`;
       }
 
       let actionHtml = '';
@@ -615,7 +619,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             url: c.url,
-            format: currentFormat,
+            format_choice: currentFormat,
             format_id: c.selectedFormatId,
             title: c.title || '',
           }),
